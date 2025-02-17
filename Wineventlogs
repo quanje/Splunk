@@ -1,0 +1,5 @@
+index="wineventlog" 
+| eval "Host_Info"=mvappend(dvc_bunit, dvc_asset), "Process_Info"=mvappend(parent_process_exec, parent_process_path, process)
+| table _time host User Host_Info EventID EventDescription Process_Info ParentCommandLine EventData_Xml 
+| where host="*" 
+| sort -_time
