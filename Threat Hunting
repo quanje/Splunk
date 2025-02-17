@@ -1,0 +1,187 @@
+1. Detecting Suspicious PowerShell Activity:
+ 
+
+index="wineventlog" ("powershell.exe" OR "pwsh.exe") 
+| stats count by user, host, process, command_line 
+| search command_line="*Invoke*"
+This query searches for suspicious PowerShell activity, specifically focusing on commands that use "Invoke", a common sign of malicious scripts.
+
+2. Unusual Login Locations:
+ 
+index=your_index sourcetype=your_sourcetype event_type=logon 
+| stats count by user, src_ip, geo_location
+| where count < 3
+This query looks for users logging in from unusual locations, which can indicate account compromise.
+3. Detecting Windows Lateral Movement (WMIC):
+ 
+index=your_index sourcetype=your_sourcetype ("wmic" OR "psexec" OR "at.exe")
+| stats count by user, src_ip, dest_ip, command_line
+| where count > 5
+This query hunts for lateral movement attempts using WMIC, PsExec, or scheduled tasks.
+4. Monitoring for Suspicious Parent-Child Processes:
+ 
+index=your_index sourcetype=your_sourcetype 
+| eval parent_process=mvindex(split(parent_process_name,"\\"),-1) 
+| search parent_process IN ("explorer.exe","winlogon.exe","lsass.exe") 
+| table _time host parent_process child_process_name command_line user 
+This query looks for suspicious child processes being spawned by high-privilege parent processes like explorer.exe, winlogon.exe, or lsass.exe.
+5. Detecting Unusual DNS Queries (Potential DGA):
+ 
+index=dns sourcetype=dns_logs 
+| stats count by query_name 
+| where len(query_name) > 15 
+| sort -count
+This query identifies unusually long DNS queries, which could indicate Domain Generation Algorithm (DGA) malware activity.
+6. Detecting Mimikatz Execution:
+ 
+index=your_index sourcetype=your_sourcetype "mimikatz.exe"
+| stats count by host, user, process, command_line
+This query hunts for instances of the well-known credential dumping tool Mimikatz.
+7. Detecting Abnormal File Downloads (e.g., Malware Delivery):
+ 
+index=your_index sourcetype=your_sourcetype (extension=exe OR extension=zip OR extension=rar OR extension=bat) 
+| stats count by src_ip, dest_ip, file_name
+This query helps you track down suspicious file downloads, especially those with potentially malicious extensions.
+8. Suspicious Service Creation:
+ 
+index=your_index sourcetype=your_sourcetype EventCode=7045 
+| table _time host user service_name service_file_name
+| search service_file_name="*.exe"
+This query monitors for suspicious service creation on Windows systems.
+9. Detecting Brute Force Attack (Windows Event Logs):
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4625 
+| stats count by user, src_ip 
+| where count > 10
+This query identifies brute force attempts by detecting multiple failed login attempts (EventCode 4625).
+10. Hunting for Rarely Seen Processes:
+ 
+index=your_index sourcetype=your_sourcetype 
+| stats count by process_name 
+| where count < 10 
+| table process_name host count
+This query hunts for rarely seen processes, which could indicate a novel or rare malware instance.
+These queries provide a good starting point for hunting various types of threats in Splunk. Depending on your environment and specific threat models, you may want to customize them further.
+11. Detecting Privilege Escalation (Windows Logs):
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4672 
+| stats count by user, host, src_ip
+| where count > 5
+This query detects users who have been assigned special privileges (EventCode 4672), which could be an indication of privilege escalation attempts.
+ 
+12. Suspicious RDP Connections:
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4624 LogonType=10 
+| stats count by user, src_ip, dest_ip
+| where count > 10
+This query tracks RDP (Remote Desktop Protocol) logins (LogonType 10) to detect abnormal login activity, which may indicate remote attacks.
+ 
+13. Tracking User Account Lockouts:
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4740 
+| stats count by user, src_ip
+| where count > 3
+This query hunts for accounts that have been locked out due to failed login attempts (EventCode 4740), often a sign of brute-force attacks.
+ 
+14. Detecting Malware Executions via Windows Event Logs:
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4688 
+| table _time user process_name command_line
+| search process_name="*.exe" AND command_line="*.bat" OR command_line="*.ps1"
+This query looks for potentially malicious executables (.exe, .bat, .ps1) being executed, which can help identify malware on a system.
+ 
+15. Suspicious File Creation (Windows Sysmon Event 11):
+ 
+index=sysmon sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventID=11
+| stats count by user, file_path, file_name
+| where count > 5
+This query detects suspicious file creations, which could indicate malware writing files to the disk.
+ 
+16. Unusual Network Connections:
+ 
+index=your_index sourcetype=network_traffic 
+| stats count by dest_ip, dest_port 
+| where count < 3 
+| sort -count
+This query helps detect unusual outbound network connections to rare or unknown IP addresses, often a sign of data exfiltration or command-and-control communication.
+ 
+17. Detecting Suspicious Registry Modifications (Sysmon Event 13):
+ 
+index=sysmon sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventID=13
+| table _time host user registry_key registry_value
+| search registry_key="*Run*" OR registry_key="*RunOnce*"
+This query hunts for suspicious registry modifications, especially those related to persistence mechanisms (e.g., Run/RunOnce keys).
+ 
+18. Detecting Pass-the-Hash Attacks:
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4624 LogonType=9 
+| stats count by user, src_ip, dest_ip
+| where count > 3
+This query detects potential Pass-the-Hash attacks by looking for LogonType 9 (which indicates a network logon using NTLM credentials).
+ 
+19. Monitoring for Anomalous HTTP Requests (Web Attacks):
+ 
+index=your_index sourcetype=access_combined 
+| stats count by clientip, uri_path, http_user_agent 
+| where count < 10
+This query looks for rare or anomalous HTTP requests, which could indicate web-based attacks like SQLi or RFI (Remote File Inclusion).
+ 
+20. Detecting Data Exfiltration via Large File Transfers:
+ 
+index=your_index sourcetype=network_traffic 
+| stats sum(bytes_out) as total_bytes by src_ip, dest_ip 
+| where total_bytes > 1000000000
+This query identifies suspiciously large outbound file transfers that may indicate data exfiltration activities.
+ 
+21. Detecting Process Injection (Sysmon Event 8):
+ 
+index=sysmon sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventID=8
+| table _time host user target_process_name source_process_name
+| search source_process_name="explorer.exe" AND target_process_name="svchost.exe"
+This query looks for process injection attempts, specifically if a legitimate process like explorer.exe is injecting into a critical system process like svchost.exe.
+ 
+22. Detecting Port Scanning (Network Traffic):
+ 
+index=your_index sourcetype=network_traffic 
+| stats count by src_ip, dest_ip, dest_port 
+| where count > 50
+This query identifies potential port scanning activities by looking for a high number of connection attempts across different ports.
+ 
+23. Detecting Exploit Attempts via CVE Keywords:
+ 
+index=your_index sourcetype=your_sourcetype "CVE-*" 
+| stats count by src_ip, dest_ip, vulnerability_id
+This query hunts for potential exploit attempts by searching for known Common Vulnerabilities and Exposures (CVEs) in logs.
+ 
+24. Detecting Rogue Devices on the Network:
+ 
+index=your_index sourcetype=dhcp_logs OR sourcetype=network_traffic
+| stats dc(mac_address) by src_ip
+| where mac_address!="expected_mac_address"
+This query helps detect rogue devices by identifying MAC addresses not typically seen in your environment.
+ 
+25. Detecting Tor Network Usage:
+ 
+index=your_index sourcetype=network_traffic 
+| lookup tor_exit_nodes.csv ip AS dest_ip 
+| search isTorExitNode="true"
+This query matches your network traffic against known Tor exit nodes, which can be indicative of users attempting to anonymize their activities or hide malicious behavior.
+ 
+26. Detecting Use of System Binaries for Malicious Purposes (Living off the Land):
+ 
+index=your_index sourcetype=your_sourcetype ("cmd.exe" OR "powershell.exe" OR "regsvr32.exe" OR "mshta.exe" OR "rundll32.exe") 
+| stats count by user, host, process, command_line
+This query identifies the use of system binaries often abused by attackers to perform malicious activities while blending in with legitimate processes.
+ 
+27. Suspicious Windows Defender Detections:
+ 
+index=your_index sourcetype=your_sourcetype "Windows Defender" 
+| stats count by signature, user, host
+This query hunts for any Windows Defender detections across your environment to identify malware or suspicious behavior that may have been blocked or flagged.
+ 
+28. Hunting for Rogue Scheduled Tasks:
+ 
+index=your_index sourcetype=your_sourcetype EventCode=4698 
+| table _time host task_name
+| where task_name!="expected_task"
+This query identifies suspicious or unauthorized scheduled tasks that may have been created as a persistence mechanism.
